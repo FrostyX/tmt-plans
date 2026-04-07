@@ -9,6 +9,8 @@
   require:
     - koji
     - git
+    - python3-ruamel-yaml
+    - python3-tomli-w
   test: python3 ./distgit-prepare.py
   adjust:
     # TODO: For now this is only available for distgit commits

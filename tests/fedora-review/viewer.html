@@ -70,7 +70,7 @@
     } from "https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";
 
     function getReviewIssues(report) {
-      return report["issues"];
+      return report["issues"] ?? [];
     }
 
     function renderIssue(issue) {
@@ -87,7 +87,7 @@
       const issues = getReviewIssues(report);
       const summary = [];
 
-      if (issues?.length === 0) {
+      if (issues.length === 0) {
         summary.push(html`<div class="result-OK">No issues were found</div>`);
       } else {
         issues.forEach((issue) => {

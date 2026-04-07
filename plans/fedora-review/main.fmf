@@ -16,3 +16,11 @@ provision:
 discover:
   how: fmf
   test: /tests/fedora-review
+
+# TODO Remove the prepare section once this PR
+# https://forge.fedoraproject.org/packaging/FedoraReview/pulls/551
+# is merged and released
+prepare:
+  how: artifact
+  provide:
+    - copr.build:10883634:fedora-44-x86_64
