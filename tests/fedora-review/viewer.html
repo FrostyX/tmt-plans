@@ -79,8 +79,10 @@
       `;
     }
 
-    function renderResults(report) {
-      const issues = getReviewIssues(report);
+    function renderResults(report, skippedChecks) {
+      const issues = (getReviewIssues(report) ?? []).filter(
+        (issue) => !(skippedChecks ?? []).includes(issue.name),
+      );
       const summary = [];
 
       if (issues?.length === 0) {
@@ -112,15 +114,32 @@
 
     const url =
       new URLSearchParams(window.location.search).get("url") ?? "./review.json";
+    const skippedChecksUrl = "./skipped-checks.json";
     try {
-      const response = await fetch(url);
-      if (response.ok) renderResults(await response.json());
-      else
+      const [response, skippedResponse] = await Promise.all([
+        fetch(url),
+        fetch(skippedChecksUrl),
+      ]);
+      if (response.ok && skippedResponse.ok) {
+        const [report, skippedChecks] = await Promise.all([
+          response.json(),
+          skippedResponse.json(),
+        ]);
+        renderResults(report, skippedChecks);
+      } else if (!response.ok) {
         renderError(
           `Failed to fetch ${url}: ${response.status} ${response.statusText}`,
         );
+      } else {
+        renderError(
+          `Failed to fetch ${skippedChecksUrl}: ${skippedResponse.status} ${skippedResponse.statusText}`,
+        );
+      }
     } catch (error) {
-      renderError(`Failed to fetch ${url}: ${error}`);
+      renderError(`Failed to fetch ${url} or ${skippedChecksUrl}: ${error}`);
     }
+
+
+
   </script>
 </html>
