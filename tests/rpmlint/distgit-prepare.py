@@ -6,6 +6,7 @@
 import argparse
 import os
 import re
+import shutil
 import sys
 import subprocess
 from pathlib import Path
@@ -60,6 +61,13 @@ def main(args: argparse.Namespace) -> None:
         print("Found rpmlint.toml file")
         with args.env_file.open("a") as f:
             f.write(f"RPMLINT_TOML_FILE={toml_file}\n")
+
+    # Copy packit config if present
+    for name in ["packit.toml", "packit.yaml", ".packit.yaml"]:
+        packit_file = dist_git_path / name
+        if packit_file.exists():
+            shutil.copy(packit_file, args.workdir)
+            break
 
     # Find the files to lint
     spec_files = list(dist_git_path.glob("*.spec"))
