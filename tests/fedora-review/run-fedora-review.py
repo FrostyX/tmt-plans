@@ -92,22 +92,6 @@ def copy_mock_fedora_ci_toml():
     shutil.copy(filename, dst)
 
 
-def copy_data_into_data():
-    """
-    There is a weird bug that we discovered with @LecrisUT. For some reason,
-    when a plan has `result: custom`, the `viewer.html` stops rendering in
-    Testing Farm. It is because for some reason, Oculus starts looking for it
-    in `data/data/viewer.html` instead of just `data/viewer.html`.
-    This is IMHO a bug but either way, until it gets resolved, we can copy the
-    data there as well.
-    See https://gitlab.com/testing-farm/general/-/work_items/111
-    """
-    shutil.copytree(
-        Path(os.environ["TMT_TEST_DATA"]),
-        Path(os.environ["TMT_TEST_DATA"]) / "data",
-    )
-
-
 def fedora_review(spec_file, workdir):
     """
     Run fedora-review
@@ -214,7 +198,6 @@ def main(args: argparse.Namespace) -> None:
     dump_results_yaml(len(issues), len(skip))
     copy_fedora_review_results(args.spec_file, args.workdir)
     copy_viewer_html()
-    copy_data_into_data()
 
     print(f"Skipped {len(skip)} issues")
     print(f"Found {len(issues)} issues")
