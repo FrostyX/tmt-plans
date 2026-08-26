@@ -39,4 +39,6 @@
   require:
     - rpmlint
     - rpmlint-fedora-license-data
+    # workaround for https://src.fedoraproject.org/rpms/rpmlint/pull-request/59
+    - glibc-langpack-en
   test: python3 ./run-rpmlint.py
