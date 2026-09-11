@@ -88,6 +88,27 @@ def copy_data_into_data():
     )
 
 
+def find_srpm(workdir: Path) -> Path:
+    """
+    Find a SRPM package among other data
+    """
+    srpms = list(workdir.glob("*.src.rpm"))
+    if not srpms:
+        raise RuntimeError(f"No SRPM found in {workdir}")
+    if len(srpms) > 1:
+        raise RuntimeError(f"More than one SRPM found in {workdir}: {srpms}")
+    return srpms[0]
+
+
+def rpm_disttag(path: Path) -> str | None:
+    """
+    Find out the disttag value for a RPM or SRPM package.
+    """
+    nvr = path.stem.rsplit(".", 1)[0]
+    release = nvr.rsplit("-", 2)[-1]
+    return release.rsplit(".", 1)[-1]
+
+
 def fedora_review(spec_file, workdir):
     """
     Run fedora-review
@@ -97,6 +118,15 @@ def fedora_review(spec_file, workdir):
 
     name = Path(spec_file).stem
     cmd = ["fedora-review", "--prebuilt", "-n", name]
+
+    # There is a weird disttag parsing bug in the `fedora-review` tool. When
+    # the results contain RPM packages with different release numbers, e.g.
+    # `nss-3.127.0-1.fc44.x86_64.rpm` and `nspr-4.39.0-4.fc44.x86_64.rpm``,
+    # it fails to parse the dist tag even though it is the same fc44 for both.
+    # https://forge.fedoraproject.org/packaging/FedoraReview/src/commit/7aeb863ec28c48d22280f9d60312c2e990a04512/src/FedoraReview/mock.py#L62-L71
+    disttag = rpm_disttag(find_srpm(workdir))
+    cmd.extend(["--define", f"DISTTAG={disttag}"])
+
     print(f"Running: {" ".join(cmd)}")
     subprocess.run(cmd, cwd=workdir, env=env, check=True)
 
