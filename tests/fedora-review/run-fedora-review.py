@@ -224,7 +224,7 @@ def main(args: argparse.Namespace) -> None:
             continue
         log.info("Copying %s to %s", src, dst)
         shutil.copy(src, dst)
-    shutil.copy(args.spec_file, workdir)
+    # shutil.copy(args.spec_file, workdir)
 
     # Uncomment if needed for development purposes
     # copy_mock_fedora_ci_toml()
