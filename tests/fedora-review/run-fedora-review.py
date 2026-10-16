@@ -128,7 +128,9 @@ def fedora_review(spec_file, workdir):
     name = Path(spec_file).stem
     # cmd = ["fedora-review", "--config", config, "--prebuilt", "-n", name]
 
-    cmd = ["fedora-review", "--config", config, "--prebuilt", "--copr-build", "11081204"]
+    cmd = ["fedora-review", "--config", config, "--prebuilt", "-n", name, "-r"]
+
+    # cmd = ["fedora-review", "--config", config, "--copr-build", "11081204"]
 
     # There is a weird disttag parsing bug in the `fedora-review` tool. When
     # the results contain RPM packages with different release numbers, e.g.
@@ -202,15 +204,25 @@ def main(args: argparse.Namespace) -> None:
     """
     Run fedora-review plan
     """
-    if not args.spec_file:
-        raise RuntimeError("No spec file provided")
+    # if not args.spec_file:
+    #     raise RuntimeError("No spec file provided")
 
-    if not args.rpm_files:
-        raise RuntimeError("No RPM files provided")
+    # if not args.rpm_files:
+    #     raise RuntimeError("No RPM files provided")
 
-    # At this point, the RPM packages are already downloaded in `args.workdir`,
-    # we just need to copy the .spec next to them
+    rpm_files = glob.glob(args.rpm_files)
+    # if not rpm_files:
+    #     raise RuntimeError(f"No RPM files match {args.rpm_files}")
+
+    # Copy the downloaded RPM packages and spec file into the review workdir.
     workdir = utils.get_workdir()
+    for rpm_file in rpm_files:
+        src = Path(rpm_file)
+        dst = workdir / src.name
+        if dst.exists() and src.samefile(dst):
+            continue
+        log.info("Copying %s to %s", src, dst)
+        shutil.copy(src, dst)
     shutil.copy(args.spec_file, workdir)
 
     # Uncomment if needed for development purposes
