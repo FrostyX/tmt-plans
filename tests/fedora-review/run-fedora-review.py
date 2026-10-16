@@ -126,7 +126,9 @@ def fedora_review(spec_file, workdir):
 
     config = str(workdir / "fedora-review.toml")
     name = Path(spec_file).stem
-    cmd = ["fedora-review", "--config", config, "--prebuilt", "-n", name]
+    # cmd = ["fedora-review", "--config", config, "--prebuilt", "-n", name]
+
+    cmd = ["fedora-review", "--config", config, "--prebuilt", "--copr-build", "11081204"]
 
     # There is a weird disttag parsing bug in the `fedora-review` tool. When
     # the results contain RPM packages with different release numbers, e.g.
