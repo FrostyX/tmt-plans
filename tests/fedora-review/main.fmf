@@ -35,5 +35,10 @@
     See documentation of the run-fedora-review script.
   require:
     - fedora-review
+
+    - koji
+    - git
+    - python3-ruamel-yaml
+    - python3-tomli-w
   test: python3 ./run-fedora-review.py
   result: custom
