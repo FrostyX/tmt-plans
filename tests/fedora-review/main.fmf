@@ -19,7 +19,6 @@
 
 /prepare-copr:
   summary: Prepare with copr environment
-  enabled: false
   duration: 30m
   order: 40
   require:
