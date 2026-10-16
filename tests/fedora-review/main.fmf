@@ -26,9 +26,7 @@
     - copr
     - git
   test: python3 ./copr-prepare.py
-  adjust:
-    when: initiator == packit
-    enabled: true
+  enabled: true
 
 /run-fedora-review:
   summary: Run fedora-review
