@@ -13,6 +13,7 @@ import json
 import yaml
 import utils
 import tomli_w
+import requests
 
 logging.basicConfig(level="INFO")
 log = logging.getLogger(Path(__file__).name)
@@ -58,11 +59,11 @@ def dump_results_yaml(issues: int, skipped: int):
         yaml.dump(data, fp)
 
 
-def copy_fedora_review_results(spec_file, workdir):
+def copy_fedora_review_results(package_name, workdir):
     """
     Copy fedora-review logs and results to the result directory
     """
-    package_name = Path(spec_file).stem
+    # package_name = Path(spec_file).stem
     fedora_review_resultdir = workdir / f"review-{package_name}"
     test_resultdir = Path(os.environ["TMT_TEST_DATA"])
     log.info(os.listdir(fedora_review_resultdir))
@@ -118,7 +119,14 @@ def rpm_disttag(path: Path) -> str | None:
     return release.rsplit(".", 1)[-1]
 
 
-def fedora_review(spec_file, workdir):
+def get_package_name(copr_build_id: int) -> str:
+    url = f"https://copr.fedorainfracloud.org/api_3/build/{copr_build_id}"
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()["source_package"]["name"]
+
+
+def fedora_review(package_name, workdir):
     """
     Run fedora-review
     """
@@ -126,7 +134,8 @@ def fedora_review(spec_file, workdir):
     env["REVIEW_NO_MOCKGROUP_CHECK"] = "true"
 
     config = str(workdir / "fedora-review.toml")
-    name = Path(spec_file).stem
+    # name = Path(spec_file).stem
+    name = package_name
     # cmd = ["fedora-review", "--config", config, "--prebuilt", "-n", name]
 
     cmd = ["fedora-review", "--config", config, "--prebuilt", "-n", name, "-r"]
@@ -237,11 +246,16 @@ def main(args: argparse.Namespace) -> None:
     dump_fedora_review_config(workdir, config)
     log.info("Skipping these checks: %s", skip)
 
-    review = fedora_review(args.spec_file, workdir)
+    # TODO Temporary hack
+    package_name = get_package_name(os.getenv("COPR_BUILD_ID"))
+
+    # review = fedora_review(args.spec_file, workdir)
+    review = fedora_review(package_name, workdir)
     issues = review.get("issues", [])
 
     dump_results_yaml(len(issues), len(skip))
-    copy_fedora_review_results(args.spec_file, workdir)
+    # copy_fedora_review_results(args.spec_file, workdir)
+    copy_fedora_review_results(package_name, workdir)
     copy_viewer_html()
 
     log.info("Skipped %s issues", len(skip))
