@@ -119,11 +119,12 @@ def rpm_disttag(path: Path) -> str | None:
     return release.rsplit(".", 1)[-1]
 
 
-def get_package_name(copr_build_id: int) -> str:
-    url = f"https://copr.fedorainfracloud.org/api_3/build/{copr_build_id}"
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json()["source_package"]["name"]
+def srpm_package_name(srpm: Path) -> str | None:
+    """
+    Find out the disttag value for a RPM or SRPM package.
+    """
+    nvr = srpm.name.rsplit(".", 2)[0]
+    return nvr.rsplit("-", 4)[-1]
 
 
 def fedora_review(package_name, workdir):
@@ -247,7 +248,7 @@ def main(args: argparse.Namespace) -> None:
     log.info("Skipping these checks: %s", skip)
 
     # TODO Temporary hack
-    package_name = get_package_name(os.getenv("COPR_BUILD_ID"))
+    package_name = srpm_package_name(find_srpm(workdir))
 
     # review = fedora_review(args.spec_file, workdir)
     review = fedora_review(package_name, workdir)
