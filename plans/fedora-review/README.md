@@ -5,7 +5,6 @@ Run [fedora-review] on the current Copr project or Koji build
 See this discussion for more
 https://discussion.fedoraproject.org/t/running-fedora-review-on-every-commit/178858
 
-
 ## Configuration
 
 The majority of packages shouldn't require any configuration. But some packages
@@ -31,8 +30,6 @@ and their descriptions.
 The configuration is passed to the `fedora-reivew` tool itself.
 So [any configuration][configuration] besides skipping checks will work as well.
 
-
-[fedora-review]: https://forge.fedoraproject.org/packaging/FedoraReview
-[distgit]: https://src.fedoraproject.org/
-[guidelines]: https://docs.fedoraproject.org/en-US/packaging-guidelines/
 [configuration]: https://forge.fedoraproject.org/packaging/FedoraReview/src/branch/master/doc/configuration.md
+[fedora-review]: https://forge.fedoraproject.org/packaging/FedoraReview
+[guidelines]: https://docs.fedoraproject.org/en-US/packaging-guidelines/
