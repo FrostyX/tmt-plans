@@ -9,7 +9,6 @@ import os
 import subprocess
 from pathlib import Path
 
-logging.basicConfig(level="INFO")
 logger = logging.getLogger(Path(__file__).name)
 
 

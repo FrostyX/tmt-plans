@@ -1,19 +1,13 @@
-/:
-  inherit: false
-
-/prepare-distgit:
-  summary: Prepare with distgit environment
-  enabled: false
+/prepare:
+  # TODO: This can be skipped when using tmt artifacts
+  # TODO: Move this to somewhere more central
+  summary: Get the artifacts and configuration
   duration: 30m
   order: 40
   require:
     - koji
     - git
-  test: python3 ./distgit-prepare.py
-  adjust:
-    # TODO: For now this is only available for distgit commits
-    when: initiator == fedora-ci and trigger == commit
-    enabled: true
+  test: python3 ./prepare.py
 
 /run-license-validate:
   summary: Run license-validate

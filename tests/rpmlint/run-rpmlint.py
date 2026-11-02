@@ -1,31 +1,75 @@
 #!/usr/bin/python3
 # /// script
-# dependencies = [ ]
+# dependencies = [
+#   "tomli-w",
+# ]
 # ///
 
-import argparse
 import logging
-import os
+import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
-logging.basicConfig(level="INFO")
+import tomli_w
+
+from utils import TestEnv
+
 logger = logging.getLogger(Path(__file__).name)
 
+CI_CONFIG_SECTION = "rpmlint"
 
-def main(args: argparse.Namespace) -> None:
+RPMLINT_TOML_FILES = [
+    "./fedora-ci.toml",
+]
+
+rc_file: Path | None = None
+
+
+def prepare(env: TestEnv) -> None:
+    """
+    - Get the rpms
+    - Get config files/settings (``*.rpmlintrc`` and ``rpmint.toml``)
+    """
+    global rc_file
+
+    env.get_rpms()
+    rpmlint_data_dir = env.workdir / "rpmlint"
+    rpmlint_data_dir.mkdir(exist_ok=True)
+    for toml_file in RPMLINT_TOML_FILES:
+        shutil.copy(toml_file, rpmlint_data_dir)
+    if config := env.get_config(CI_CONFIG_SECTION):
+        if rc_content := config.get("rc"):
+            rc_content: str
+            rc_file = rpmlint_data_dir / "rpmlintrc"
+            rc_file.write_text(rc_content)
+        if toml_content := config.get("toml"):
+            toml_content: dict[str, Any]
+            toml_file = rpmlint_data_dir / "rpmlint.toml"
+            with toml_file.open("wb") as f:
+                tomli_w.dump(toml_content, f)
+    else:
+        rc_files = list(env.git_dir.glob("*.rpmlintrc"))
+        if len(rc_files) > 1:
+            logger.warning("More than 1 rpmlintrc file found")
+        if rc_files:
+            logger.info("Found rpmlintrc file")
+            rc_file = rc_files[0]
+        if (toml_file := env.git_dir / "rpmlint.toml").exists():
+            logger.info("Found rpmlint.toml file")
+            shutil.copy(toml_file, rpmlint_data_dir)
+
+
+def main(env: TestEnv) -> None:
     """
     Run rpmlint
     """
     rpmlint_args = []
-    if args.rc_file:
-        rpmlint_args.extend(["-r", args.rc_file])
-    if args.toml_file:
-        rpmlint_args.extend(["-c", args.toml_file])
-    if args.spec_file:
-        rpmlint_args.append(args.spec_file)
-    if args.rpm_files:
-        rpmlint_args.append(args.rpm_files)
+    if rc_file:
+        rpmlint_args.extend(["-r", rc_file])
+    rpmlint_args.extend(["-c", env.workdir / "rpmlint"])
+    rpmlint_args.append(str(env.spec_file))
+    rpmlint_args.extend([str(rpm) for rpm in env.rpms])
     logger.info(f"Running rpmlint with: {rpmlint_args}")
     subprocess.run(
         ["rpmlint", *rpmlint_args],
@@ -34,37 +78,13 @@ def main(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Simple wrapper for rpmlint. Can also pass variables via environment variables."
-    )
-    parser.add_argument(
-        "--spec-file",
-        help="Spec file to check.",
-        default=os.environ.get("SPEC_FILE"),
-    )
-    parser.add_argument(
-        "--rpm-files",
-        help="RPM files to check. Can be wildcard.",
-        default=os.environ.get("RPM_FILES"),
-    )
-    parser.add_argument(
-        "--rc-file",
-        metavar="RPMLINT_RC_FILE",
-        help=".rpmlintrc file.",
-        default=os.environ.get("RPMLINT_RC_FILE"),
-    )
-    parser.add_argument(
-        "--toml-file",
-        metavar="RPMLINT_TOML_FILE",
-        help="Rpmlint toml file to override.",
-        default=os.environ.get("RPMLINT_TOML_FILE"),
-    )
-    # TODO: Process the test results?
-
-    args = parser.parse_args()
+    env = TestEnv.from_env_variables()
     try:
-        main(args)
-    except (subprocess.CalledProcessError, SystemExit):
+        prepare(env)
+        main(env)
+    except SystemExit:
+        raise
+    except subprocess.CalledProcessError:
         logger.error("Rpmlint failed!")
         raise SystemExit(1)
     except Exception as exc:

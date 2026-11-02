@@ -1,22 +1,22 @@
 #!/usr/bin/python3
 
 import sys
-import argparse
 import os
 import subprocess
 import shutil
 from pathlib import Path
-from enum import Enum
 import logging
 import json
-import yaml
-import utils
 import tomli_w
+from typing import Any
 
-logging.basicConfig(level="INFO")
+from utils import Result, TestEnv
+
+DIR = Path(__file__).parent
 log = logging.getLogger(Path(__file__).name)
 
 CI_CONFIG_SECTION = "fedora-review"
+FEDORA_REVIEW_TOML = "fedora-review.toml"
 
 # Expose these to the users
 FEDORA_REVIEW_RESULTS = [
@@ -29,61 +29,32 @@ FEDORA_REVIEW_RESULTS = [
 ]
 
 
-class Result(Enum):
-    INFO = "info"
-    FAIL = "fail"
-    PASS = "pass"
-
-
-def dump_results_yaml(issues: int, skipped: int):
+def dump_results_yaml(test_env: TestEnv, issues: int, skipped: int):
     """
     https://tmt.readthedocs.io/en/stable/spec/results.html
     """
-    result = Result.FAIL if issues else Result.PASS
-    data = [
-        {
-            "name": "/",
-            "result": result.value,
-            "note": [
-                f"{skipped} skipped",
-                f"{issues} issues",
-            ],
-            "log": ["viewer.html", "fedora-review.toml"] + FEDORA_REVIEW_RESULTS,
-        }
+    test_env.main_result.result = Result.FAIL if issues else Result.PASS
+    test_env.main_result.note = [
+        f"{skipped} skipped",
+        f"{issues} issues",
     ]
-    path = os.path.join(os.environ.get("TMT_TEST_DATA"), "results.yaml")
-    log.info("Creating: %s", path)
-    with open(path, "w+") as fp:
-        yaml.dump(data, fp)
+    test_env.main_result.add_viewer_html(DIR / "viewer.html")
+    test_env.main_result.add_file(test_env.workdir / FEDORA_REVIEW_TOML)
+    copy_fedora_review_results(test_env)
+    test_env.results.save()
 
 
-def copy_fedora_review_results(spec_file, workdir):
+def copy_fedora_review_results(test_env: TestEnv) -> None:
     """
     Copy fedora-review logs and results to the result directory
     """
-    package_name = Path(spec_file).stem
-    fedora_review_resultdir = workdir / f"review-{package_name}"
-    test_resultdir = Path(os.environ["TMT_TEST_DATA"])
+    fedora_review_resultdir = test_env.workdir / f"review-{test_env.srpm_name}"
     log.info(os.listdir(fedora_review_resultdir))
     for name in FEDORA_REVIEW_RESULTS:
-        src = fedora_review_resultdir / name
-        dst = test_resultdir / name
-        log.info(src)
-        if src.exists():
-            log.info("Copying %s to the test results", name)
-            shutil.copy(src, dst)
+        test_env.main_result.add_file(fedora_review_resultdir / name, missing_ok=True)
 
 
-def copy_viewer_html():
-    """
-    Copy viewer.html from plan data to the result directory
-    """
-    viewer = "viewer.html"
-    log.info("Copying %s to the test results", viewer)
-    shutil.copy(viewer, Path(os.environ["TMT_TEST_DATA"]) / viewer)
-
-
-def copy_mock_fedora_ci_toml():
+def copy_mock_fedora_ci_toml(test_env: TestEnv):
     """
     Copy a mock fedora-ci.toml to the plan data directory
     This is only for development purposes. In production a package either has
@@ -92,20 +63,8 @@ def copy_mock_fedora_ci_toml():
     """
     filename = "fedora-ci.toml"
     log.info("Copying %s to the plan data", filename)
-    dst = Path(os.environ["TMT_PLAN_DATA"]) / "dist-git" / filename
+    dst = test_env.git_dir / filename
     shutil.copy(filename, dst)
-
-
-def find_srpm(workdir: Path) -> Path:
-    """
-    Find a SRPM package among other data
-    """
-    srpms = list(workdir.glob("*.src.rpm"))
-    if not srpms:
-        raise RuntimeError(f"No SRPM found in {workdir}")
-    if len(srpms) > 1:
-        raise RuntimeError(f"More than one SRPM found in {workdir}: {srpms}")
-    return srpms[0]
 
 
 def rpm_disttag(path: Path) -> str | None:
@@ -117,15 +76,15 @@ def rpm_disttag(path: Path) -> str | None:
     return release.rsplit(".", 1)[-1]
 
 
-def fedora_review(spec_file, workdir):
+def fedora_review(test_env: TestEnv) -> dict[str, Any]:
     """
     Run fedora-review
     """
     env = os.environ.copy()
     env["REVIEW_NO_MOCKGROUP_CHECK"] = "true"
 
-    config = str(workdir / "fedora-review.toml")
-    name = Path(spec_file).stem
+    config = str(test_env.workdir / FEDORA_REVIEW_TOML)
+    name = test_env.srpm_name
     cmd = ["fedora-review", "--config", config, "--prebuilt", "-n", name]
 
     # There is a weird disttag parsing bug in the `fedora-review` tool. When
@@ -133,18 +92,18 @@ def fedora_review(spec_file, workdir):
     # `nss-3.127.0-1.fc44.x86_64.rpm` and `nspr-4.39.0-4.fc44.x86_64.rpm``,
     # it fails to parse the dist tag even though it is the same fc44 for both.
     # https://forge.fedoraproject.org/packaging/FedoraReview/src/commit/7aeb863ec28c48d22280f9d60312c2e990a04512/src/FedoraReview/mock.py#L62-L71
-    disttag = rpm_disttag(find_srpm(workdir))
+    disttag = rpm_disttag(test_env.srpm)
     cmd.extend(["--define", f"DISTTAG={disttag}"])
 
     log.info("Running: %s", " ".join(cmd))
     subprocess.run(
         cmd,
-        cwd=workdir,
+        cwd=test_env.workdir,
         env=env,
         check=True,
     )
 
-    path = os.path.join(workdir, "review-" + name, "review.json")
+    path = os.path.join(test_env.workdir, "review-" + name, "review.json")
     if not os.path.exists(path):
         raise RuntimeError(f"Result JSON doesn't exist: {path}")
     log.info("Result: %s", path)
@@ -177,57 +136,40 @@ def skip_checks(config):
     return skip_for_all + skip_for_package
 
 
-def parse_fedora_review_toml(workdir: Path):
-    """
-    Parse the fedora-review.toml out of the fedora-ci.toml
-    """
-    dist_git_path = workdir / "dist-git"
-    if config := utils.get_config(dist_git_path, CI_CONFIG_SECTION):
-        return config
-    return {}
-
-
-def dump_fedora_review_config(workdir: Path, fedora_review_config):
-    name = "fedora-review.toml"
-    path: Path = workdir / name
-    with path.open("wb") as fp:
+def dump_fedora_review_config(test_env: TestEnv, fedora_review_config):
+    with (test_env.workdir / FEDORA_REVIEW_TOML).open("wb") as fp:
         tomli_w.dump(fedora_review_config, fp)
-    log.info("Copying %s to the test results", name)
-    shutil.copy(path, Path(os.environ["TMT_TEST_DATA"]) / name)
 
 
-def main(args: argparse.Namespace) -> None:
+def main(test_env: TestEnv) -> None:
     """
     Run fedora-review plan
     """
-    if not args.spec_file:
+    if not test_env.spec_file:
         raise RuntimeError("No spec file provided")
 
-    if not args.rpm_files:
+    if not test_env.rpms:
         raise RuntimeError("No RPM files provided")
 
     # At this point, the RPM packages are already downloaded in `args.workdir`,
     # we just need to copy the .spec next to them
-    workdir = utils.get_workdir()
-    shutil.copy(args.spec_file, workdir)
+    shutil.copy(test_env.spec_file, test_env.workdir)
 
     # Uncomment if needed for development purposes
     # copy_mock_fedora_ci_toml()
 
     # Parse the `fedora-review config` aout of the `fedora-ci.toml`, update
     # the list of excluded checks and save it as `fedora-review.toml`.
-    config = parse_fedora_review_toml(workdir)
+    config = test_env.get_config(CI_CONFIG_SECTION) or {}
     skip = skip_checks(config)
     config["exclude"] = ",".join(skip)
-    dump_fedora_review_config(workdir, config)
+    dump_fedora_review_config(test_env, config)
     log.info("Skipping these checks: %s", skip)
 
-    review = fedora_review(args.spec_file, workdir)
+    review = fedora_review(test_env)
     issues = review.get("issues", [])
 
-    dump_results_yaml(len(issues), len(skip))
-    copy_fedora_review_results(args.spec_file, workdir)
-    copy_viewer_html()
+    dump_results_yaml(test_env, len(issues), len(skip))
 
     log.info("Skipped %s issues", len(skip))
     log.error("Found %s issues", len(issues))
@@ -236,26 +178,10 @@ def main(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description=(
-            "Simple wrapper for fedora-review. "
-            "Can also pass variables via environment variables."
-        )
-    )
-    parser.add_argument(
-        "--spec-file",
-        help="Spec file to check.",
-        default=os.environ.get("SPEC_FILE"),
-    )
-    parser.add_argument(
-        "--rpm-files",
-        help="RPM files to check. Can be wildcard.",
-        default=os.environ.get("RPM_FILES"),
-    )
+    env = TestEnv.from_env_variables()
 
-    args = parser.parse_args()
     try:
-        main(args)
+        main(env)
     except subprocess.CalledProcessError:
         log.error("Fedora-review failed!")
         sys.exit(1)

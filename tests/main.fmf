@@ -1,4 +1,0 @@
-framework: beakerlib
-# Note: Cannot use path: $TMT_TEST_NAME because it is not expanded
-path: /
-test: .$TMT_TEST_NAME/
