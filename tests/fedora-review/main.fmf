@@ -9,6 +9,7 @@
     - git
     - python3-ruamel-yaml
     - python3-tomli-w
+    - python3-copr
   test: python3 ./prepare.py
 
 /run-fedora-review:

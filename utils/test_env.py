@@ -9,7 +9,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import requests
 from pathlib import Path
+from copr.v3 import Client
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -367,6 +369,11 @@ class CoprTestEnv(TestEnv):
 
     def __init__(self, copr_build_id: int) -> None:
         self.build_id = copr_build_id
+        self.chroot = os.environ.get(
+            "PACKIT_COPR_CHROOT",
+            "fedora-rawhide-x86_64",
+        )
+        self.client = Client.create_from_config_file()
 
     @property
     def git_dir(self) -> Path:
@@ -402,6 +409,15 @@ class CoprTestEnv(TestEnv):
         return dist_git_path
 
     def get_rpms(self) -> None:
-        # TODO: This assumes testing-farm environment without multipipeline
-        for rpm in Path("/var/share/test-artifacts").glob("*.rpm"):
-            shutil.copy(rpm, self.workdir)
+        urls = self.client.build_chroot_proxy.get_results_urls(
+            self.build_id,
+            self.chroot,
+        )
+        for url in urls:
+            name = url.rsplit("/", 1)[-1]
+            dst = self.workdir / name
+
+            logger.info("Downloading: %s/%s", self.workdir, name)
+            response = requests.get(url)
+            response.raise_for_status()
+            dst.write_bytes(response.content)
